@@ -1,0 +1,249 @@
+/*
+ *             MFRC522      Arduino       Arduino   Arduino    Arduino          Arduino
+ *             Reader/PCD   Uno/101       Mega      Nano v3    Leonardo/Micro   Pro Micro
+ * Signal      Pin          Pin           Pin       Pin        Pin              Pin
+ * -----------------------------------------------------------------------------------------
+ * RST/Reset   RST          9             5         D9         RESET/ICSP-5     RST
+ * SPI SS      SDA(SS)      10            53        D10        10               10
+ * SPI MOSI    MOSI         11 / ICSP-4   51        D11        ICSP-4           16
+ * SPI MISO    MISO         12 / ICSP-1   50        D12        ICSP-1           14
+ * SPI SCK     SCK          13 / ICSP-3   52        D13        ICSP-3           15
+ */
+#include <EEPROM.h>
+#include <SPI.h>
+#include <MFRC522.h>
+#include <afstandssensor.h>
+#include <Servo.h>
+#include <SoftwareSerial.h>
+#include "avdweb_VirtualDelay.h"
+SoftwareSerial mySerial(3, 2); // RX, TX 
+int motor1pin1 = 16;
+int motor1pin2 = 17;
+int motor2pin1 = 8;
+int motor2pin2 = 9;
+int access = 15;
+int autorize = 0;
+int per = 0;
+char     color1;
+// AfstandsSensor(triggerPin, echoPin);
+AfstandsSensor afstandssensor(11, 10);
+#define SS_PIN 53
+#define RST_PIN 5
+int servoPin2 = 7; 
+MFRC522 rfid(SS_PIN, RST_PIN); // Instance of the class
+
+MFRC522::MIFARE_Key key; 
+Servo Servo2;
+VirtualDelay delay1,delay2;
+// Init array that will store new NUID 
+byte nuidPICC[4];
+byte nuidprof[]={254, 142, 45, 112};
+
+void setup() { 
+  Serial.begin(9600);
+  Serial1.begin(9600);
+  SPI.begin(); // Init SPI bus
+  rfid.PCD_Init(); // Init MFRC522 
+pinMode(motor2pin1, OUTPUT);
+pinMode(10, OUTPUT);
+  pinMode(motor2pin2, OUTPUT);
+   pinMode(motor1pin1, OUTPUT);
+  pinMode(motor1pin2, OUTPUT);
+    pinMode(access, INPUT_PULLUP);
+    pinMode(11, INPUT_PULLUP);
+    digitalWrite(10,HIGH);
+  Servo2.attach(servoPin2); 
+  
+     Servo2.write(90);
+  //down
+ // go(LOW,HIGH);
+  delay(500);
+//up
+  
+//  go(HIGH,LOW);
+   delay(500);
+//  delay(1000);
+//  stop1();
+  
+  
+  for (byte i = 0; i < 6; i++) {
+    key.keyByte[i] = 0xFF;
+  }
+
+  Serial.println(F("This code scan the MIFARE Classsic NUID."));
+  Serial.print(F("Using the following key:"));
+  printHex(key.keyByte, MFRC522::MF_KEY_SIZE);
+//  EEPROM.write(0,1);
+}
+ 
+void loop() {
+  
+  // Reset the loop if no new card present on the sensor/reader. This saves the entire process when idle.
+  if ( ! rfid.PICC_IsNewCardPresent()){
+    if(digitalRead(11)==0){
+ //     Serial.println(digitalRead(11));
+      stop1();
+      }
+ //   Serial.println(EEPROM.read(0));
+   // do only one time in the loop   
+//  if(delay1.elapsed()) stop1();
+  if(delay2.elapsed()) Servo2.write(90);
+  
+  if(Serial1.available()){
+     color1=Serial1.read();
+   Serial.println(color1); 
+ //  Serial.println(mySerial.read());
+ switch (color1) {
+  case 'F': 
+    Serial.println(color1);
+    Servo2.write(0);
+  //delay2.start(4000);
+    break;
+  case 'C': 
+   digitalWrite(10,HIGH);
+  //delay2.start(4000);
+    break;
+    case 'D': 
+   digitalWrite(10,LOW);
+  //delay2.start(4000);
+    break;
+      case 'H': 
+    Serial.println(color1);
+    Servo2.write(90);
+ // delay2.start(4000);
+    break;}
+   delay(50);
+   if(per==2){  
+  autorize=0;
+  }
+if(autorize==1){
+  per=per+1;
+  
+    switch (color1) {
+    case 'A':
+    Serial.println(color1);
+     Serial.println("etage 1");
+  //   go(HIGH,LOW);
+  //   delay1.start(4000);
+      floor1();
+    break;
+    case 'B':
+    Serial.println(color1);
+    Serial.println("etage 0");
+    floor0();
+    break;
+    case 'C': 
+    Serial.println(color1);
+    break;
+     case 'D': 
+    Serial.println(color1);
+    break;
+     case 'E': 
+    Serial.println(color1);
+    break;
+  
+   case 'G': 
+   Serial.println(color1);
+    break;
+   case 'H': 
+  Serial.println(color1);
+    break;
+  }
+    }}
+if(digitalRead(access)==0){
+  Servo2.write(0);
+  delay2.start(4000);
+  
+  }
+    return;}
+
+  // Verify if the NUID has been readed
+  if ( ! rfid.PICC_ReadCardSerial())
+    return;
+
+  Serial.print(F("PICC type: "));
+  MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
+  Serial.println(rfid.PICC_GetTypeName(piccType));
+
+  // Check is the PICC of Classic MIFARE type
+  if (piccType != MFRC522::PICC_TYPE_MIFARE_MINI &&  
+    piccType != MFRC522::PICC_TYPE_MIFARE_1K &&
+    piccType != MFRC522::PICC_TYPE_MIFARE_4K) {
+    Serial.println(F("Your tag is not of type MIFARE Classic."));
+    return;
+  }
+
+   if (rfid.uid.uidByte[0] == nuidprof[0] && 
+    rfid.uid.uidByte[1] == nuidprof[1] && 
+    rfid.uid.uidByte[2] == nuidprof[2] && 
+    rfid.uid.uidByte[3] == nuidprof[3] ) {
+    Serial.println(F("prof card "));
+    Serial.println(F("A new card has been detected."));
+     autorize=1;
+     per=0;
+
+  
+   
+    Serial.println(F("The NUID tag is:"));
+    Serial.print(F("In hex: "));
+    printHex(rfid.uid.uidByte, rfid.uid.size);
+    Serial.println();
+    Serial.print(F("In dec: "));
+    printDec(rfid.uid.uidByte, rfid.uid.size);
+    Serial.println();
+  }
+  
+
+  // Halt PICC
+  rfid.PICC_HaltA();
+
+  // Stop encryption on PCD
+  rfid.PCD_StopCrypto1();
+}
+
+
+/**
+ * Helper routine to dump a byte array as hex values to Serial. 
+ */
+void printHex(byte *buffer, byte bufferSize) {
+  for (byte i = 0; i < bufferSize; i++) {
+    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
+    Serial.print(buffer[i], HEX);
+  }
+}
+
+/**
+ * Helper routine to dump a byte array as dec values to Serial.
+ */
+void printDec(byte *buffer, byte bufferSize) {
+  for (byte i = 0; i < bufferSize; i++) {
+    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
+    Serial.print(buffer[i], DEC);
+  }
+}
+void go(boolean pin1,boolean pin2){
+    digitalWrite(motor2pin1, pin1);
+  digitalWrite(motor2pin2, pin2);
+   digitalWrite(motor1pin1, pin2);
+  digitalWrite(motor1pin2, pin1);
+  }
+  void stop1(){
+    digitalWrite(motor2pin1, LOW);
+  digitalWrite(motor2pin2, LOW);
+    digitalWrite(motor1pin1, LOW);
+  digitalWrite(motor1pin2, LOW);
+  }
+    void floor0(){
+    if(EEPROM.read(0)==1){
+      go(LOW,HIGH);
+      delay(3000);
+      EEPROM.write(0,0);
+      } 
+      }
+       void floor1(){
+    if(EEPROM.read(0)==0){
+      go(HIGH,LOW);
+      delay(3000);
+      EEPROM.write(0,1);
+      } 
+      }
